@@ -21,11 +21,21 @@
 #include "DiscordEmbedMsg.h"
 #include "Duration.h"
 #include <utility>
+#include <list>
+#include <unordered_map>
 
 namespace dpp
 {
     class cluster;
 }
+
+struct ConfirmButton
+{
+    uint64 KeepRoleId{};
+    uint64 DeleteRoleId{};
+    uint64 GuildId{};
+    std::list<uint64> Members;
+};
 
 class WH_BOT_API DiscordMgr
 {
@@ -34,8 +44,6 @@ public:
     ~DiscordMgr();
 
     static DiscordMgr* instance();
-
-    [[nodiscard]] inline bool IsEnable() const { return _isEnable; }
 
     void LoadConfig(bool reload);
     void Start();
@@ -49,12 +57,16 @@ private:
     void ConfigureCommands();
     void CheckGuild();
 
+    ConfirmButton* GetConfirmButton(uint64 authorId);
+    void AddConfirmButton(uint64 authorId, ConfirmButton confirmButton);
+    void DeleteConfirmButton(uint64 authorId);
+
     std::unique_ptr<dpp::cluster> _bot;
 
     // Config
-    bool _isEnable{};
     std::string _botToken;
-    std::size_t _guildID{};
+
+    std::unordered_map<uint64, ConfirmButton> _confirmButtons;
 
     DiscordMgr(DiscordMgr const&) = delete;
     DiscordMgr(DiscordMgr&&) = delete;

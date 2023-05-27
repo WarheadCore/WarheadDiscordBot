@@ -24,6 +24,7 @@
 #include "Containers.h"
 #include <dpp/cluster.h>
 #include <dpp/message.h>
+#include <list>
 
 namespace
 {
@@ -46,49 +47,16 @@ DiscordMgr::~DiscordMgr()
 
 void DiscordMgr::LoadConfig(bool reload)
 {
-    auto oldEnable{ _isEnable };
-    _isEnable = sConfigMgr->GetOption<bool>("Discord.Bot.Enable", true);
-
-    if (!reload && !_isEnable)
-        return;
-
-    // If after reload config disable - stop bot
-    if (reload && oldEnable && !_isEnable)
+    _botToken = sConfigMgr->GetOption<std::string>("Discord.Bot.Token", "");
+    if (_botToken.empty())
     {
-        LOG_WARN("discord", "Stop discord bot after config reload");
-        Stop();
+        LOG_FATAL("discord", "> Empty bot token for discord. Disable system");
         return;
     }
-
-    // Load config options
-    {
-        _botToken = sConfigMgr->GetOption<std::string>("Discord.Bot.Token", "");
-        if (_botToken.empty())
-        {
-            LOG_FATAL("discord", "> Empty bot token for discord. Disable system");
-            _isEnable = false;
-            return;
-        }
-
-        _guildID = sConfigMgr->GetOption<int64>("Discord.Guild.ID", 0);
-        if (!_guildID)
-        {
-            LOG_FATAL("discord", "> Empty guild id for discord. Disable system");
-            _isEnable = false;
-            return;
-        }
-    }
-
-    // Start bot if after reload config option set to enable
-    if (reload && !oldEnable && _isEnable)
-        Start();
 }
 
 void DiscordMgr::Start()
 {
-    if (!_isEnable)
-        return;
-
     LOG_INFO("server.loading", "Loading discord bot...");
 
     StopWatch sw;
@@ -121,7 +89,7 @@ void DiscordMgr::Stop()
 
 void DiscordMgr::SendDefaultMessage(std::string_view message, uint64 channelID)
 {
-    if (!_isEnable || !_bot)
+    if (!_bot)
         return;
 
     dpp::message discordMessage;
@@ -133,7 +101,7 @@ void DiscordMgr::SendDefaultMessage(std::string_view message, uint64 channelID)
 
 void DiscordMgr::SendEmbedMessage(DiscordEmbedMsg const& embed, uint64 channelID)
 {
-    if (!_isEnable || !_bot)
+    if (!_bot)
         return;
 
     _bot->message_create(dpp::message(channelID, *embed.GetMessage()));
@@ -141,9 +109,6 @@ void DiscordMgr::SendEmbedMessage(DiscordEmbedMsg const& embed, uint64 channelID
 
 void DiscordMgr::ConfigureLogs()
 {
-    if (!_isEnable)
-        return;
-
     _bot->on_ready([this](const auto&)
     {
         LOG_INFO("discord.bot", "DiscordBot: Logged in as {}", _bot->me.username);
@@ -180,118 +145,220 @@ void DiscordMgr::ConfigureLogs()
 void DiscordMgr::ConfigureCommands()
 {
     // Message clean commands
-    dpp::slashcommand randomCommand{ "random", "Зарандомить команды для валоранта", _bot->me.id };
+    dpp::slashcommand checkRolesCommand{ "check-roles", "Проверить роли участников (25 человек максимум)", _bot->me.id };
 
-    dpp::command_option channelOption{ dpp::co_channel, "channel", "Войс канал с игроками", true };
-    channelOption.channel_types.emplace_back(dpp::channel_type::CHANNEL_VOICE);
-    randomCommand.add_option(channelOption);
+    dpp::command_option roleOptionKeep{ dpp::co_role, "role_keep", "Роль, которую нужно оставить", true };
+    dpp::command_option roleOptionDelete{ dpp::co_role, "role_del", "Роль, которую нужно удалить, если есть та, которую нужно оставить", true };
+    dpp::command_option maxUsers{ dpp::co_integer, "max_users", "Максимальное количество пользователей для удаления роли", true };
 
-    _bot->guild_command_create(randomCommand, _guildID);
+    maxUsers.set_min_value(1);
+    maxUsers.set_max_value(20);
+
+    checkRolesCommand.add_option(roleOptionKeep);
+    checkRolesCommand.add_option(roleOptionDelete);
+    checkRolesCommand.add_option(maxUsers);
+
+    // Admin only
+    checkRolesCommand.set_default_permissions(0);
+
+    _bot->current_user_get_guilds([this, checkRolesCommand](dpp::confirmation_callback_t const& callback)
+    {
+        if (callback.is_error())
+            return;
+
+        auto guilds = std::get<dpp::guild_map>(callback.value);
+        if (guilds.empty())
+            return;
+
+        for (auto const& [id, guild] : guilds)
+            _bot->guild_command_create(checkRolesCommand, id);
+    });
 
     _bot->on_slashcommand([this](dpp::slashcommand_t const& event)
     {
         auto commandName{ event.command.get_command_name() };
-
-        if (commandName != "random")
+        if (commandName != "check-roles")
             return;
 
         // Start make message
         auto embedMsg = std::make_shared<DiscordEmbedMsg>();
-        embedMsg->SetTitle("Рандомайзер игроков");
+        embedMsg->SetTitle("Проверка ролей");
         auto channelID{ event.command.channel_id };
 
         // Get count parameters
-        auto targetChannelID = std::get<dpp::snowflake>(event.get_parameter("channel"));
-
-        auto targetChannel = find_channel(targetChannelID);
-        if (!targetChannel)
+        auto targetRoleKeepId = std::get<dpp::snowflake>(event.get_parameter("role_keep"));
+        auto targetRoleKeep = find_role(targetRoleKeepId);
+        if (!targetRoleKeep)
         {
             embedMsg->SetColor(DiscordMessageColor::Red);
-            embedMsg->SetDescription(Warhead::StringFormat("Указанного канала не существует: <#{}>", uint64(targetChannelID)));
+            embedMsg->SetDescription(Warhead::StringFormat("Указанной роли не существует: <@&{}> ({})", uint64(targetRoleKeep), uint64(targetRoleKeep)));
 
             dpp::message replyMessage{ channelID, *embedMsg->GetMessage() };
             event.reply(replyMessage);
             return;
         }
 
-        if (targetChannel->get_type() != dpp::channel_type::CHANNEL_VOICE)
+        auto targetRoleDeleteId = std::get<dpp::snowflake>(event.get_parameter("role_del"));
+        auto targetRoleDelete = find_role(targetRoleDeleteId);
+        if (!targetRoleDelete)
         {
             embedMsg->SetColor(DiscordMessageColor::Red);
-            embedMsg->SetDescription(Warhead::StringFormat("Указанный канал не является войсом: <#{}>", uint64(targetChannelID)));
+            embedMsg->SetDescription(Warhead::StringFormat("Указанной роли не существует: <@&{}> ({})", uint64(targetRoleDelete), uint64(targetRoleDelete)));
 
             dpp::message replyMessage{ channelID, *embedMsg->GetMessage() };
             event.reply(replyMessage);
             return;
         }
 
-        auto voiceMembers = targetChannel->get_voice_members();
-        if (voiceMembers.empty())
+        auto maxUsersCheck = std::get<int64>(event.get_parameter("max_users"));
+        auto authorId = event.command.member.user_id;
+
+        ConfirmButton confirmButton;
+        confirmButton.GuildId = event.command.guild_id;
+        confirmButton.KeepRoleId = targetRoleKeepId;
+        confirmButton.DeleteRoleId = targetRoleDeleteId;
+
+        auto members = _bot->guild_get_members_sync(confirmButton.GuildId, maxUsersCheck, 0);
+        if (members.empty())
         {
             embedMsg->SetColor(DiscordMessageColor::Red);
-            embedMsg->SetDescription(Warhead::StringFormat("Указанный канал пустой: <#{}>", uint64(targetChannelID)));
-
-            dpp::message replyMessage{ channelID, *embedMsg->GetMessage() };
-            event.reply(replyMessage);
-        }
-
-        if (voiceMembers.size() == 1)
-        {
-            embedMsg->SetColor(DiscordMessageColor::White);
-            embedMsg->SetDescription(Warhead::StringFormat("В указанном канале <#{}> только один боец и это <@{}>", uint64(targetChannelID), uint64(voiceMembers.begin()->first)));
+            embedMsg->SetDescription("Пользователи не найдены. Пустой сервер?");
 
             dpp::message replyMessage{ channelID, *embedMsg->GetMessage() };
             event.reply(replyMessage);
             return;
         }
 
-        std::vector<uint64> sortedMembers;
-
-        for (auto const& [id, state] : voiceMembers)
-            sortedMembers.emplace_back(id);
-
-        // Time to random this list
-        Warhead::Containers::RandomShuffle(sortedMembers);
-
-        std::pair<std::string, std::string> memberList;
-        std::size_t maxPlayerInCommand{ 5 };
-
-        if (sortedMembers.size() <= 8)
-            maxPlayerInCommand = sortedMembers.size() / 2;
-
-        std::size_t playersInCommand{};
-        bool needFillSecondCommand{};
-
-        std::string spectators;
-
-        for (auto const& id : sortedMembers)
+        for (auto& [memberId, member] : members)
         {
-            if (needFillSecondCommand && playersInCommand >= maxPlayerInCommand)
+            bool foundKeepRole{};
+            bool foundDelRole{};
+
+            for (auto const memberRoleId : member.roles)
             {
-                spectators += Warhead::StringFormat("<@{}>\n", id);
-                continue;
+                if (memberRoleId == targetRoleKeepId)
+                {
+                    foundKeepRole = true;
+                    continue;
+                }
+
+                if (memberRoleId == targetRoleDeleteId)
+                    foundDelRole = true;
             }
 
-            if (++playersInCommand > maxPlayerInCommand)
-            {
-                needFillSecondCommand = true;
-                playersInCommand = 1;
-            }
-
-            if (!needFillSecondCommand)
-                memberList.first += Warhead::StringFormat("{}. <@{}>\n", playersInCommand, id);
-            else
-                memberList.second += Warhead::StringFormat("{}. <@{}>\n", playersInCommand, id);
+            if (foundKeepRole && foundDelRole)
+                confirmButton.Members.emplace_back(memberId);
         }
 
-        embedMsg->SetColor(DiscordMessageColor::Teal);
-        embedMsg->AddEmbedField("Атакеры", memberList.first, true);
-        embedMsg->AddEmbedField("Деферы", memberList.second, true);
+        if (confirmButton.Members.empty())
+        {
+            embedMsg->SetColor(DiscordMessageColor::Red);
+            embedMsg->SetDescription("Пользователи по условию не найдены");
 
-        if (!spectators.empty())
-            embedMsg->AddEmbedField("Зрители", spectators);
+            dpp::message replyMessage{ channelID, *embedMsg->GetMessage() };
+            event.reply(replyMessage);
+            return;
+        }
+
+        embedMsg->SetColor(DiscordMessageColor::Indigo);
+        embedMsg->AddEmbedField("Оставить роль", Warhead::StringFormat("<@&{}> ({})", uint64(targetRoleKeepId), uint64(targetRoleKeepId)));
+        embedMsg->AddEmbedField("Удалить роль", Warhead::StringFormat("<@&{}> ({})", uint64(targetRoleDeleteId), uint64(targetRoleDeleteId)));
+
+        uint8 index{};
+        for (auto const memberId : confirmButton.Members)
+            embedMsg->AddDescription(Warhead::StringFormat("{}. <@{}>\n", ++index, uint64(memberId)));
+
+        AddConfirmButton(authorId, std::move(confirmButton));
+
+        dpp::message replyMessage{ channelID, *embedMsg->GetMessage() };
+
+        replyMessage.add_component(dpp::component().add_component(
+                dpp::component().set_label("Подтвердить!").
+                        set_type(dpp::cot_button).
+                        set_style(dpp::cos_danger).
+                        set_id(Warhead::StringFormat("{}_Confirm", authorId))));
+        replyMessage.add_component(dpp::component().add_component(
+                dpp::component().set_label("Удалить запрос").
+                        set_type(dpp::cot_button).
+                        set_style(dpp::cos_danger).
+                        set_id(Warhead::StringFormat("{}_Delete", authorId))));
+        event.reply(replyMessage);
+    });
+
+    _bot->on_button_click([this](dpp::button_click_t const& event)
+    {
+        auto channelID{ event.command.channel_id };
+        auto authorID{ event.command.member.user_id};
+        auto embedMsg = std::make_shared<DiscordEmbedMsg>();
+        embedMsg->SetTitle("Проверка ролей - Выполнение");
+
+        bool isAuthor = event.custom_id.starts_with(Warhead::StringFormat("{}", authorID));
+        bool isConfirm = event.custom_id == Warhead::StringFormat("{}_Confirm", authorID);
+        bool isDelete = event.custom_id == Warhead::StringFormat("{}_Delete", authorID);
+
+        if (!isAuthor)
+        {
+            embedMsg->SetColor(DiscordMessageColor::Red);
+            embedMsg->SetDescription("Вы не являетесь автором этого запроса");
+
+            dpp::message replyMessage{ channelID, *embedMsg->GetMessage() };
+            event.reply(replyMessage);
+            return;
+        }
+
+        if (!isConfirm && !isDelete)
+        {
+            embedMsg->SetColor(DiscordMessageColor::Red);
+            embedMsg->SetDescription("Странная ситуация, не могу понять, куда вы нажали о.о");
+
+            dpp::message replyMessage{ channelID, *embedMsg->GetMessage() };
+            event.reply(replyMessage);
+            return;
+        }
+
+        if (isDelete)
+        {
+            _bot->message_delete(event.command.message_id, channelID);
+
+            embedMsg->SetColor(DiscordMessageColor::Indigo);
+            embedMsg->SetDescription("Запрос удалён");
+
+            dpp::message replyMessage{ channelID, *embedMsg->GetMessage() };
+            event.reply(replyMessage);
+            return;
+        }
+
+        if (!isConfirm)
+        {
+            embedMsg->SetColor(DiscordMessageColor::Red);
+            embedMsg->SetDescription("Странная ситуация (2), не могу понять, куда вы нажали о.о");
+
+            dpp::message replyMessage{ channelID, *embedMsg->GetMessage() };
+            event.reply(replyMessage);
+            return;
+        }
+
+        auto confirm = GetConfirmButton(authorID);
+        if (!confirm)
+        {
+            embedMsg->SetColor(DiscordMessageColor::Red);
+            embedMsg->SetDescription("Не найден запрос на проверку");
+
+            dpp::message replyMessage{ channelID, *embedMsg->GetMessage() };
+            event.reply(replyMessage);
+            return;
+        }
+
+        embedMsg->SetColor(DiscordMessageColor::Indigo);
+        embedMsg->SetDescription("Запрос на сервер дискорда был отправлен");
 
         dpp::message replyMessage{ channelID, *embedMsg->GetMessage() };
         event.reply(replyMessage);
+
+        for (auto const memberId : confirm->Members)
+            _bot->guild_member_delete_role(confirm->GuildId, memberId, confirm->DeleteRoleId);
+
+        DeleteConfirmButton(authorID);
     });
 }
 
@@ -310,7 +377,7 @@ void DiscordMgr::CheckGuild()
 
     for (auto const& [guildID, guild] : guilds)
     {
-        if (guildID == _guildID)
+        if (guildID == TEST_GUILD_ID)
         {
             isExistGuild = true;
             break;
@@ -319,11 +386,32 @@ void DiscordMgr::CheckGuild()
 
     if (!isExistGuild)
     {
-        LOG_ERROR("discord", "DiscordBot: Not found config guild: {}. Disable bot", _guildID);
-        _isEnable = false;
+        LOG_ERROR("discord", "DiscordBot: Not found config guild: {}. Disable bot", TEST_GUILD_ID);
         Stop();
         return;
     }
 
-    LOG_DEBUG("discord", "DiscordBot: Found config guild: {}", _guildID);
+    LOG_DEBUG("discord", "DiscordBot: Found config guild: {}", TEST_GUILD_ID);
+}
+
+ConfirmButton* DiscordMgr::GetConfirmButton(uint64 authorId)
+{
+    return Warhead::Containers::MapGetValuePtr(_confirmButtons, authorId);
+}
+
+void DiscordMgr::AddConfirmButton(uint64 authorId, ConfirmButton confirmButton)
+{
+    auto oldConfirm = GetConfirmButton(authorId);
+    if (oldConfirm)
+    {
+        *oldConfirm = std::move(confirmButton);
+        return;
+    }
+
+    _confirmButtons.emplace(authorId, std::move(confirmButton));
+}
+
+void DiscordMgr::DeleteConfirmButton(uint64 authorId)
+{
+    _confirmButtons.erase(authorId);
 }
