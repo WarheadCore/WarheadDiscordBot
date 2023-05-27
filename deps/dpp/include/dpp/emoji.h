@@ -23,7 +23,8 @@
 #include <dpp/snowflake.h>
 #include <dpp/misc-enum.h>
 #include <dpp/managed.h>
-#include <dpp/nlohmann/json_fwd.hpp>
+#include <dpp/utility.h>
+#include <dpp/json_fwd.h>
 #include <unordered_map>
 #include <dpp/json_interface.h>
 
@@ -87,6 +88,15 @@ public:
 	virtual ~emoji();
 
 	/**
+	* @brief Create a mentionable emoji
+	* @param name The name of the emoji.
+	* @param id The ID of the emoji.
+	* @param is_animated is emoji animated.
+	* @return std::string The formatted mention of the emoji.
+	*/
+	static std::string get_mention(const std::string& name, const snowflake& id, bool is_animated = false);
+
+	/**
 	 * @brief Read class values from json object
 	 * 
 	 * @param j A json object to read from
@@ -138,9 +148,9 @@ public:
 	 * @brief Load an image into the object as base64
 	 * 
 	 * @param image_blob Image binary data
-	 * @param type Type of image
+	 * @param type Type of image. It can be one of `i_gif`, `i_jpg` or `i_png`.
 	 * @return emoji& Reference to self
-	 * @throw dpp::exception Image content exceeds discord maximum of 256 kilobytes
+	 * @throw dpp::length_exception Image content exceeds discord maximum of 256 kilobytes
 	 */
 	emoji& load_image(const std::string &image_blob, const image_type type);
 

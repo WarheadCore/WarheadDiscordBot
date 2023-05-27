@@ -42,7 +42,7 @@
 #include <dpp/discordvoiceclient.h>
 #include <dpp/cache.h>
 #include <dpp/cluster.h>
-#include <dpp/nlohmann/json.hpp>
+#include <dpp/json.h>
 
 #ifdef HAVE_VOICE
 	#include <sodium.h>
@@ -55,7 +55,9 @@
 
 namespace dpp {
 
+[[maybe_unused]]
 constexpr int32_t opus_sample_rate_hz = 48000;
+[[maybe_unused]]
 constexpr int32_t opus_channel_count = 2;
 std::string external_ip;
 
@@ -269,10 +271,8 @@ discord_voice_client::discord_voice_client(dpp::cluster* _cluster, snowflake _ch
 	ssrc(0),
 	timescale(1000000),
 	paused(false),
-#if HAVE_VOICE
 	encoder(nullptr),
 	repacketizer(nullptr),
-#endif
 	fd(INVALID_SOCKET),
 	secret_key(nullptr),
 	sequence(0),
@@ -305,13 +305,24 @@ discord_voice_client::discord_voice_client(dpp::cluster* _cluster, snowflake _ch
 	if (!repacketizer) {
 		throw dpp::voice_exception("discord_voice_client::discord_voice_client; opus_repacketizer_create() failed");
 	}
-	this->connect();
+	try {
+		this->connect();
+	}
+	catch (std::exception&) {
+		cleanup();
+		throw;
+	}
 #else
 	throw dpp::voice_exception("Voice support not enabled in this build of D++");
 #endif
 }
 
 discord_voice_client::~discord_voice_client()
+{
+	cleanup();
+}
+
+void discord_voice_client::cleanup()
 {
 	if (runner) {
 		this->terminating = true;
@@ -337,10 +348,8 @@ discord_voice_client::~discord_voice_client()
 		voice_courier.join();
 	}
 #endif
-	if (secret_key) {
-		delete[] secret_key;
-		secret_key = nullptr;
-	}
+	delete[] secret_key;
+	secret_key = nullptr;
 }
 
 bool discord_voice_client::is_ready() {
@@ -389,12 +398,12 @@ int discord_voice_client::udp_send(const char* data, size_t length)
 	servaddr.sin_family = AF_INET;
 	servaddr.sin_port = htons(this->port);
 	servaddr.sin_addr.s_addr = inet_addr(this->ip.c_str());
-	return sendto(this->fd, data, (int)length, 0, (const sockaddr*)&servaddr, (int)sizeof(sockaddr_in));
+	return (int) sendto(this->fd, data, (int)length, 0, (const sockaddr*)&servaddr, (int)sizeof(sockaddr_in));
 }
 
 int discord_voice_client::udp_recv(char* data, size_t max_length)
 {
-	return recv(this->fd, data, (int)max_length, 0);
+	return (int) recv(this->fd, data, (int)max_length, 0);
 }
 
 bool discord_voice_client::handle_frame(const std::string &data)
@@ -649,6 +658,11 @@ void discord_voice_client::read_ready()
 			return;
 		}
 
+		/* It's a "silence packet" - throw it away. */
+		if (packet.size() < 44) {
+			return;
+		}
+
 		if (uint8_t payload_type = packet[1] & 0b0111'1111;
 		    72 <= payload_type && payload_type <= 76) {
 			/*
@@ -771,7 +785,7 @@ void discord_voice_client::write_ready()
 		std::lock_guard<std::mutex> lock(this->stream_mutex);
 		if (!this->paused && outbuf.size()) {
 			type = send_audio_type;
-			if (outbuf[0].packet.size() == 2 && ((uint16_t)(*(outbuf[0].packet.data()))) == AUDIO_TRACK_MARKER) {
+			if (outbuf[0].packet.size() == 2 && (*((uint16_t*)(outbuf[0].packet.data()))) == AUDIO_TRACK_MARKER) {
 				outbuf.erase(outbuf.begin());
 				track_marker_found = true;
 				if (tracks > 0)
@@ -793,6 +807,28 @@ void discord_voice_client::write_ready()
 			if (sleep_time.count() > 0) {
 				std::this_thread::sleep_for(sleep_time);
 			}
+		}
+		else if (type == satype_overlap_audio) {
+			std::chrono::nanoseconds latency = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now() - last_timestamp);
+			std::chrono::nanoseconds sleep_time = std::chrono::nanoseconds(duration) + last_sleep_remainder - latency;
+			std::chrono::nanoseconds sleep_increment = (std::chrono::nanoseconds(duration) - latency) / AUDIO_OVERLAP_SLEEP_SAMPLES;
+			if (sleep_time.count() > 0) {
+				uint16_t samples_count = 0;
+				std::chrono::nanoseconds overshoot_accumulator;
+
+				do {
+					std::chrono::high_resolution_clock::time_point start_sleep = std::chrono::high_resolution_clock::now();
+					std::this_thread::sleep_for(sleep_increment);
+					std::chrono::high_resolution_clock::time_point end_sleep = std::chrono::high_resolution_clock::now();
+
+					samples_count++;
+					overshoot_accumulator += std::chrono::duration_cast<std::chrono::nanoseconds>(end_sleep - start_sleep) - sleep_increment;
+					sleep_time -= std::chrono::duration_cast<std::chrono::nanoseconds>(end_sleep - start_sleep);
+				} while (std::chrono::nanoseconds(overshoot_accumulator.count() / samples_count) + sleep_increment < sleep_time);
+				last_sleep_remainder = sleep_time;
+			}
+			else
+				last_sleep_remainder = std::chrono::nanoseconds(0);
 		}
 
 		last_timestamp = std::chrono::high_resolution_clock::now();
@@ -1066,7 +1102,7 @@ uint32_t discord_voice_client::get_tracks_remaining() {
 discord_voice_client& discord_voice_client::skip_to_next_marker() {
 	std::lock_guard<std::mutex> lock(this->stream_mutex);
 	/* Keep popping the first entry off the outbuf until the first entry is a track marker */
-	while (!outbuf.empty() && outbuf[0].packet.size() != sizeof(uint16_t) && ((uint16_t)(*(outbuf[0].packet.data()))) != AUDIO_TRACK_MARKER) {
+	while (!outbuf.empty() && outbuf[0].packet.size() != sizeof(uint16_t) && (*((uint16_t*)(outbuf[0].packet.data()))) != AUDIO_TRACK_MARKER) {
 		outbuf.erase(outbuf.begin());
 	}
 	if (outbuf.size()) {
@@ -1129,7 +1165,7 @@ discord_voice_client& discord_voice_client::send_audio_raw(uint16_t* audio_data,
 
 discord_voice_client& discord_voice_client::send_audio_opus(uint8_t* opus_packet, const size_t length) {
 #if HAVE_VOICE
-	int samples = opus_packet_get_nb_samples(opus_packet, (opus_int32)length, 48000);
+	int samples = opus_packet_get_nb_samples(opus_packet, (opus_int32)length, opus_sample_rate_hz);
 	uint64_t duration = (samples / 48) / (timescale / 1000000);
 	send_audio_opus(opus_packet, length, duration);
 #else

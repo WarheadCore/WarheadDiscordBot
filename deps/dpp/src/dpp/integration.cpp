@@ -21,12 +21,14 @@
 #include <dpp/discordevents.h>
 #include <dpp/stringops.h>
 #include <dpp/integration.h>
-#include <dpp/nlohmann/json.hpp>
+#include <dpp/json.h>
 #include <dpp/cache.h>
 
-using json = nlohmann::json;
+
 
 namespace dpp {
+
+using json = nlohmann::json;
 
 integration::integration() :
 	managed(),
@@ -116,7 +118,7 @@ bool integration::expiry_kicks_user() const {
 	return flags & if_expire_kick;
 }
 
-connection::connection() : id(0), revoked(false), verified(false), friend_sync(false), show_activity(false), visible(false) {
+connection::connection() : id({}), revoked(false), verified(false), friend_sync(false), show_activity(false), visible(false) {
 }
 
 connection& connection::fill_from_json(nlohmann::json* j) {

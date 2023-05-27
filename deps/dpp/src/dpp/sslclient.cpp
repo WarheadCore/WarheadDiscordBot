@@ -65,6 +65,7 @@
 #include <string>
 #include <iostream>
 #include <unordered_map>
+#include <chrono>
 #include <dpp/sslclient.h>
 #include <dpp/exception.h>
 #include <dpp/utility.h>
@@ -271,10 +272,22 @@ ssl_client::ssl_client(const std::string &_hostname, const std::string &_port, b
 		if (plaintext) {
 			ssl = nullptr;
 		} else {
-			ssl = new openssl_connection();
+			try {
+				ssl = new openssl_connection();
+			}
+			catch (std::bad_alloc&) {
+				delete ssl;
+				throw;
+			}
 		}
 	}
-	this->connect();
+	try {
+		this->connect();
+	}
+	catch (std::exception&) {
+		cleanup();
+		throw;
+	}
 }
 
 /* SSL Client constructor throws std::runtime_error if it can't connect to the host */
@@ -444,7 +457,10 @@ void ssl_client::read_loop()
 				pfd[0].events |= POLLOUT;
 			}
 
-			r = poll(pfd, sockets, 1000);
+			const int64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+			int poll_time = 1000 - (now % 1000);
+			poll_time = poll_time > 400 ? 1000 : poll_time + poll_time / 3 + 1;
+			r = poll(pfd, sockets, now / 1000 == (int64_t)last_tick ? poll_time : 0);
 
 			if (r == 0)
 				continue;
@@ -464,7 +480,7 @@ void ssl_client::read_loop()
 				if (plaintext) {
 					read_blocked_on_write = false;
 					read_blocked = false;
-					r = ::recv(sfd, server_to_client_buffer, DPP_BUFSIZE, 0);
+					r = (int) ::recv(sfd, server_to_client_buffer, DPP_BUFSIZE, 0);
 					if (r <= 0) {
 						/* error or EOF */
 						return;
@@ -535,7 +551,7 @@ void ssl_client::read_loop()
 				/* Try to write */
 
 				if (plaintext) {
-					r = ::send(sfd, client_to_server_buffer + client_to_server_offset, (int)client_to_server_length, 0);
+					r = (int) ::send(sfd, client_to_server_buffer + client_to_server_offset, (int)client_to_server_length, 0);
 
 					if (r < 0) {
 						/* Write error */
@@ -621,12 +637,17 @@ void ssl_client::close()
 	buffer.clear();
 }
 
-ssl_client::~ssl_client()
+void ssl_client::cleanup()
 {
 	this->close();
 	if (!keepalive) {
 		delete ssl;
 	}
+}
+
+ssl_client::~ssl_client()
+{
+	cleanup();
 }
 
 };

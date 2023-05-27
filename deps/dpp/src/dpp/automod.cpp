@@ -20,7 +20,7 @@
  ************************************************************************************/
 #include <dpp/automod.h>
 #include <dpp/discordevents.h>
-#include <dpp/nlohmann/json.hpp>
+#include <dpp/json.h>
 
 namespace dpp {
 
@@ -35,6 +35,9 @@ automod_action::~automod_action() = default;
 automod_action& automod_action::fill_from_json(nlohmann::json* j) {
 	type = (automod_action_type)int8_not_null(j, "type");
 	switch (type) {
+		case amod_action_block_message:
+			custom_message = string_not_null(&((*j)["metadata"]), "custom_message");
+			break;
 		case amod_action_send_alert:
 			channel_id = snowflake_not_null(&((*j)["metadata"]), "channel_id");
 			break;
@@ -52,6 +55,12 @@ std::string automod_action::build_json(bool with_id) const {
 		{ "type", type }
 	});
 	switch (type) {
+		case amod_action_block_message:
+			if (!custom_message.empty()) {
+				j["metadata"] = json::object();
+				j["metadata"]["custom_message"] = custom_message;
+			}
+			break;
 		case amod_action_send_alert:
 			if (channel_id) {
 				j["metadata"] = json::object();
@@ -78,6 +87,9 @@ automod_metadata& automod_metadata::fill_from_json(nlohmann::json* j) {
 	for (auto k : (*j)["keyword_filter"]) {
 		keywords.push_back(k);
 	}
+	for (auto k : (*j)["regex_patterns"]) {
+		regex_patterns.push_back(k);
+	}
 	for (auto k : (*j)["presets"]) {
 		presets.push_back((automod_preset_type)k.get<uint32_t>());
 	}
@@ -85,24 +97,30 @@ automod_metadata& automod_metadata::fill_from_json(nlohmann::json* j) {
 		allow_list.push_back(k);
 	}
 	mention_total_limit = int8_not_null(j, "mention_total_limit");
+	mention_raid_protection_enabled = bool_not_null(j, "mention_raid_protection_enabled");
 	return *this;
 }
 
 std::string automod_metadata::build_json(bool with_id) const {
 	json j;
 	j["keyword_filter"] = json::array();
+	j["regex_patterns"] = json::array();
 	j["presets"] = json::array();
 	j["allow_list"] = json::array();
-	for (auto v : keywords) {
+	for (auto &v : keywords) {
 		j["keyword_filter"].push_back(v);
+	}
+	for (auto &v : regex_patterns) {
+		j["regex_patterns"].push_back(v);
 	}
 	for (auto v : presets) {
 		j["presets"].push_back((uint32_t)v);
 	}
-	for (auto v : allow_list) {
+	for (auto &v : allow_list) {
 		j["allow_list"].push_back(v);
 	}
 	j["mention_total_limit"] = mention_total_limit;
+	j["mention_raid_protection_enabled"] = mention_raid_protection_enabled;
 	return j.dump();
 
 }
@@ -126,7 +144,7 @@ automod_rule& automod_rule::fill_from_json(nlohmann::json* j) {
 	enabled = bool_not_null(j, "enabled");
 	exempt_roles.clear();
 	exempt_channels.clear();
-	for (auto k : (*j)["automod_actions"]) {
+	for (auto k : (*j)["actions"]) {
 		actions.push_back(automod_action().fill_from_json(&k));
 	}
 	for (auto k : (*j)["exempt_roles"]) {

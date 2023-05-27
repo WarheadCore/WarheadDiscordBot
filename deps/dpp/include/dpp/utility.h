@@ -28,11 +28,17 @@
 #include <map>
 #include <functional>
 
+#ifndef MAX_CND_IMAGE_SIZE
+	#define MAX_CDN_IMAGE_SIZE 4096
+#endif
+#ifndef MIN_CDN_IMAGE_SIZE
+	#define MIN_CDN_IMAGE_SIZE 16
+#endif
+
 /**
  * @brief The main namespace for D++ functions, classes and types
  */
 namespace dpp {
-
 	/**
 	 * @brief Utility helper functions, generally for logging, running programs, time/date manipulation, etc
 	 */
@@ -265,24 +271,46 @@ namespace dpp {
 		};
 
 		/**
-		 * @brief Convert floats to RGB for sending in embeds
+		 * @brief Convert doubles to RGB for sending in embeds
 		 * 
 		 * @param red red value, between 0 and 1 inclusive
 		 * @param green green value, between 0 and 1 inclusive
 		 * @param blue blue value, between 0 and 1 inclusive
 		 * @return uint32_t returned integer colour value
 		 */
-		uint32_t DPP_EXPORT rgb(float red, float green, float blue);
+		uint32_t DPP_EXPORT rgb(double red, double green, double blue);
 
 		/**
 		 * @brief Convert ints to RGB for sending in embeds
-		 * 
+		 *
 		 * @param red red value, between 0 and 255 inclusive
 		 * @param green green value, between 0 and 255 inclusive
 		 * @param blue blue value, between 0 and 255 inclusive
 		 * @return uint32_t returned integer colour value
 		 */
 		uint32_t DPP_EXPORT rgb(int red, int green, int blue);
+
+	        /**
+		 * @brief Convert doubles to CMYK for sending in embeds
+		 *
+		 * @param c cyan value, between 0 and 1 inclusive
+		 * @param m magenta value, between 0 and 1 inclusive
+		 * @param y yellow value, between 0 and 1 inclusive
+		 * @param k key (black) value, between 0 and 1 inclusive
+		 * @return uint32_t returned integer colour value
+		 */
+		uint32_t DPP_EXPORT cmyk(double c, double m, double y, double k);
+		
+		/**
+		 * @brief Convert ints to CMYK for sending in embeds
+		 *
+		 * @param c cyan value, between 0 and 255 inclusive
+		 * @param m magenta value, between 0 and 255 inclusive
+		 * @param y yellow value, between 0 and 255 inclusive
+		 * @param k key (black) value, between 0 and 255 inclusive
+		 * @return uint32_t returned integer colour value
+		 */
+		uint32_t DPP_EXPORT cmyk(int c, int m, int y, int k);
 
 		/**
 		 * @brief Output hex values of a section of memory for debugging
@@ -316,7 +344,7 @@ namespace dpp {
 		 * @note Be aware this function can block! If you are regularly reading large files, consider caching them.
 		 * @param filename The path to the file to read
 		 * @return std::string The file contents
-		 * @throw dpp::exception on failure to read the entire file
+		 * @throw dpp::file_exception on failure to read the entire file
 		 */
 		std::string DPP_EXPORT read_file(const std::string& filename);
 
@@ -335,10 +363,10 @@ namespace dpp {
 		std::string DPP_EXPORT validate(const std::string& value, size_t _min, size_t _max, const std::string& exception_message);
 
 		/**
-		 * @brief Return the url parameter for an avatar size, or empty if the size is 0
+		 * @brief Get the url query parameter for the cdn endpoint. Internally used to build url getters.
 		 * 
-		 * @param size size to generate url parameter for
-		 * @return std::string url parameter
+		 * @param size size to generate url parameter for. Must be any power of two between 16 and 4096 (inclusive) or it'll return an empty string.
+		 * @return std::string url query parameter e.g. `?size=128`, or an empty string
 		 */
 		std::string DPP_EXPORT avatar_size(uint32_t size);
 
@@ -399,6 +427,36 @@ namespace dpp {
 		 * @return std::string The formatted mention of the slashcommand with its subcommand
 		 */
 		std::string DPP_EXPORT slashcommand_mention(snowflake command_id, const std::string &command_name, const std::string &subcommand_group, const std::string &subcommand);
+
+        	/**
+		 * @brief Create a mentionable user.
+		 * @param id The ID of the user.
+		 * @return std::string The formatted mention of the user.
+		 */
+		std::string DPP_EXPORT user_mention(const snowflake& id);
+
+		/**
+		* @brief Create a mentionable channel.
+		* @param id The ID of the channel.
+		* @return std::string The formatted mention of the channel.
+		*/
+		std::string DPP_EXPORT channel_mention(const snowflake& id);
+
+		/**
+		* @brief Create a mentionable emoji
+		* @param name The name of the emoji.
+		* @param id The ID of the emoji.
+		* @param is_animated is emoji animated.
+		* @return std::string The formatted mention of the emoji.
+		*/
+		std::string DPP_EXPORT emoji_mention(const std::string& name, const snowflake& id, bool is_animated = false);
+
+		/**
+		* @brief Create a mentionable role.
+		* @param id The ID of the role.
+		* @return std::string The formatted mention of the role.
+		*/
+		std::string DPP_EXPORT role_mention(const snowflake& id);
 
 		/**
 		 * @brief Returns the library's version string

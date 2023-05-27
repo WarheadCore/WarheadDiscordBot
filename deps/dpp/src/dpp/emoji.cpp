@@ -20,7 +20,7 @@
  ************************************************************************************/
 #include <dpp/emoji.h>
 #include <dpp/discordevents.h>
-#include <dpp/nlohmann/json.hpp>
+#include <dpp/json.h>
 #include <dpp/exception.h>
 
 namespace dpp {
@@ -36,7 +36,11 @@ emoji::emoji(const std::string n, const snowflake i, const uint8_t f) : managed(
 }
 
 emoji::~emoji() {
-    delete image_data;
+	delete image_data;
+}
+
+std::string emoji::get_mention(const std::string &name, const snowflake &id, bool is_animated) {
+	return utility::emoji_mention(name,id,is_animated);
 }
 
 emoji& emoji::fill_from_json(nlohmann::json* j) {
@@ -89,7 +93,8 @@ emoji& emoji::load_image(const std::string &image_blob, const image_type type) {
 	static const std::map<image_type, std::string> mimetypes = {
 		{ i_gif, "image/gif" },
 		{ i_jpg, "image/jpeg" },
-		{ i_png, "image/png" }
+		{ i_png, "image/png" },
+		{ i_webp, "image/webp" },
 	};
 	if (image_blob.size() > MAX_EMOJI_SIZE) {
 		throw dpp::length_exception("Emoji file exceeds discord limit of 256 kilobytes");
@@ -109,15 +114,7 @@ std::string emoji::format() const
 }
 
 std::string emoji::get_mention() const {
-	if (id) {
-		if (is_animated()) {
-			return "<" + format() + ">";
-		} else {
-			return "<:" + format() + ">";
-		}
-	} else {
-		return ":" + format() + ":";
-	}
+	return utility::emoji_mention(name,id,is_animated());
 }
 
 

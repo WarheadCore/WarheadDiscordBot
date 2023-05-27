@@ -22,27 +22,47 @@
 #include <dpp/discordevents.h>
 #include <dpp/utility.h>
 #include <dpp/emoji.h>
-#include <dpp/nlohmann/json.hpp>
+#include <dpp/json.h>
 
-using json = nlohmann::json;
+
 
 namespace dpp {
 
-std::string activity::get_large_asset_url(uint16_t size) const {
-	// https://discord.com/developers/docs/topics/gateway#activity-object-activity-asset-image
+using json = nlohmann::json;
+
+std::string activity::get_large_asset_url(uint16_t size, const image_type format) const {
+	static const std::map<image_type, std::string> extensions = {
+			{ i_jpg, "jpeg" },
+			{ i_png, "png" },
+			{ i_webp, "webp" },
+	};
+
+	if (extensions.find(format) == extensions.end()) {
+		return std::string();
+	}
+
 	if (!this->assets.large_image.empty() && this->application_id &&
 		this->assets.large_image.find(':') == std::string::npos) { // make sure it's not a prefixed proxy image
-		return utility::cdn_host + "/app-assets/" + std::to_string(this->application_id) + "/" + this->assets.large_image + ".png" + utility::avatar_size(size);
+		return utility::cdn_host + "/app-assets/" + std::to_string(this->application_id) + "/" + this->assets.large_image + "." + extensions.find(format)->second + utility::avatar_size(size);
 	} else {
 		return std::string();
 	}
 }
 
-std::string activity::get_small_asset_url(uint16_t size) const {
-	// https://discord.com/developers/docs/topics/gateway#activity-object-activity-asset-image
+std::string activity::get_small_asset_url(uint16_t size, const image_type format) const {
+	static const std::map<image_type, std::string> extensions = {
+			{ i_jpg, "jpeg" },
+			{ i_png, "png" },
+			{ i_webp, "webp" },
+	};
+
+	if (extensions.find(format) == extensions.end()) {
+		return std::string();
+	}
+
 	if (!this->assets.small_image.empty() && this->application_id &&
 		this->assets.small_image.find(':') == std::string::npos) { // make sure it's not a prefixed proxy image
-		return utility::cdn_host + "/app-assets/" + std::to_string(this->application_id) + "/" + this->assets.small_image + ".png" + utility::avatar_size(size);
+		return utility::cdn_host + "/app-assets/" + std::to_string(this->application_id) + "/" + this->assets.small_image + "." + extensions.find(format)->second + utility::avatar_size(size);
 	} else {
 		return std::string();
 	}
@@ -179,7 +199,7 @@ presence& presence::fill_from_json(nlohmann::json* j) {
 				for (auto &b : act["buttons"]) {
 					activity_button btn;
 					if (b.is_string()) { // its may be just a string (label) because normal bots cannot access the button URLs
-						btn.label = b;
+						btn.label = b.get<std::string>();;
 					} else {
 						btn.label = string_not_null(&b, "label");
 						btn.url = string_not_null(&b, "url");
@@ -199,7 +219,7 @@ presence& presence::fill_from_json(nlohmann::json* j) {
 					try {
 						a.party.current_size = act["party"]["size"][0].get<int32_t>();
 						a.party.maximum_size = act["party"]["size"][1].get<int32_t>();
-					} catch (std::exception &exception) {}
+					} catch ([[maybe_unused]] std::exception &exception) {}
 				}
 			}
 			if (act.find("secrets") != act.end()) {
@@ -228,6 +248,7 @@ std::string presence::build_json(bool with_id) const {
 		{ps_online, "online"},
 		{ps_offline, "offline"},
 		{ps_idle, "idle"},
+		{ps_invisible, "invisible"},
 		{ps_dnd, "dnd"}
 	};
 	json j({

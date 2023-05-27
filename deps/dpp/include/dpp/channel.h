@@ -26,7 +26,7 @@
 #include <dpp/utility.h>
 #include <dpp/voicestate.h>
 #include <dpp/message.h>
-#include <dpp/nlohmann/json_fwd.hpp>
+#include <dpp/json_fwd.h>
 #include <dpp/permissions.h>
 #include <dpp/json_interface.h>
 #include <unordered_map>
@@ -52,7 +52,7 @@ enum channel_type : uint8_t {
 	 */
 	CHANNEL_STORE		= 6,
 	CHANNEL_ANNOUNCEMENT_THREAD	= 10,	//!< a temporary sub-channel within a GUILD_ANNOUNCEMENT channel
-	CHANNEL_PUBLIC_THREAD	= 11,	//!< a temporary sub-channel within a GUILD_TEXT channel
+	CHANNEL_PUBLIC_THREAD	= 11,	//!< a temporary sub-channel within a GUILD_TEXT or GUILD_FORUM channel
 	CHANNEL_PRIVATE_THREAD	= 12,	//!< a temporary sub-channel within a GUILD_TEXT channel that is only viewable by those invited and those with the MANAGE_THREADS permission
 	CHANNEL_STAGE		= 13,	//!< a "stage" channel, like a voice channel with one authorised speaker
 	CHANNEL_DIRECTORY	= 14,   //!< the channel in a [hub](https://support.discord.com/hc/en-us/articles/4406046651927-Discord-Student-Hubs-FAQ) containing the listed servers
@@ -64,24 +64,27 @@ enum channel_type : uint8_t {
  * listed above as provided by Discord. If discord add another value > 15, we will have to
  * shuffle these values upwards by one bit.
  */
-enum channel_flags : uint8_t {
+enum channel_flags : uint16_t {
 	/// NSFW Gated Channel
-	c_nsfw =		0b00010000,
+	c_nsfw =		0b0000000000010000,
 	/// Video quality forced to 720p
-	c_video_quality_720p =	0b00100000,
+	c_video_quality_720p =	0b0000000000100000,
 	/// Lock permissions (only used when updating channel positions)
-	c_lock_permissions =	0b01000000,
-	/// Thread pinned in a forum (type 15) channel
-	c_pinned_thread =	0b10000000,
+	c_lock_permissions =	0b0000000001000000,
+	/// Thread is pinned to the top of its parent forum channel
+	c_pinned_thread =	0b0000000010000000,
+	/// Whether a tag is required to be specified when creating a thread in a forum channel. Tags are specified in the thread::applied_tags field.
+	c_require_tag =		0b0000000100000000,
+	/* Note that the 9th and 10th bit are used for the forum layout type */
 };
 
 /**
  * @brief The flags in discord channel's raw "flags" field. We use these for serialisation only, right now. Might be better to create a new field than to make the existing channel::flags from uint8_t to uint16_t, if discord adds more flags in future.
  */
 enum discord_channel_flags : uint8_t {
-	/// Thread pinned in a forum (type 15) channel
+	/// Thread is pinned to the top of its parent forum channel
 	dc_pinned_thread = 1 << 1,
-	/// whether a tag is required to be specified when creating a thread in a forum channel. Tags are specified in the thread::applied_tags field.
+	/// Whether a tag is required to be specified when creating a thread in a forum channel. Tags are specified in the thread::applied_tags field.
 	dc_require_tag =   1 << 4,
 };
 
@@ -93,6 +96,15 @@ enum default_forum_sort_order_t : uint8_t {
 	so_latest_activity = 0,
 	/// Sort forum posts by creation time (from most recent to oldest)
 	so_creation_date = 1,
+};
+
+/**
+ * @brief Types of forum layout views that indicates how the threads in a forum channel will be displayed for users by default
+ */
+enum forum_layout_type : uint8_t {
+	fl_not_set = 0, //!< No default has been set for the forum channel
+	fl_list_view = 1, //!< Display posts as a list
+	fl_gallery_view = 2, //!< Display posts as a collection of tiles
 };
 
 /**
@@ -237,7 +249,9 @@ struct DPP_EXPORT forum_tag : public managed {
 	forum_tag& set_name(const std::string& name);
 };
 
-/** @brief A group of thread member objects*/
+/**
+ * @brief A group of thread member objects. the key is the thread_id of the dpp::thread_member
+ */
 typedef std::unordered_map<snowflake, thread_member> thread_member_map;
 
 /**
@@ -304,7 +318,7 @@ public:
 	/** Sorting position, lower number means higher up the list */
 	uint16_t position;
 
-	/** the bitrate (in bits) of the voice channel */
+	/** the bitrate (in kilobits) of the voice channel */
 	uint16_t bitrate;
 
 	/** amount of seconds a user has to wait before sending another message (0-21600); bots, as well as users with the permission manage_messages or manage_channel, are unaffected*/
@@ -322,8 +336,8 @@ public:
 	/** the default sort order type used to order posts in forum channels */
 	default_forum_sort_order_t default_sort_order;
 
-	/** Flags bitmap */
-	uint8_t flags;
+	/** Flags bitmap (dpp::channel_flags) */
+	uint16_t flags;
 	
 	/** Maximum user limit for voice channels (0-99) */
 	uint8_t user_limit;
@@ -333,6 +347,13 @@ public:
 
 	/** Destructor */
 	virtual ~channel();
+
+	/**
+	* @brief Create a mentionable channel.
+	* @param id The ID of the channel.
+	* @return std::string The formatted mention of the channel.
+	*/
+	static std::string get_mention(const snowflake& id);
 
 	/** Read class values from json object
 	 * @param j A json object to read from
@@ -378,12 +399,28 @@ public:
 	channel& set_type(channel_type type);
 
 	/**
+	 * @brief Set the default forum layout type for the forum channel
+	 *
+	 * @param layout_type The layout type
+	 * @return Reference to self, so these method calls may be chained
+	 */
+	channel& set_default_forum_layout(forum_layout_type layout_type);
+
+	/**
+	 * @brief Set the default forum sort order for the forum channel
+	 *
+	 * @param sort_order The sort order
+	 * @return Reference to self, so these method calls may be chained
+	 */
+	channel& set_default_sort_order(default_forum_sort_order_t sort_order);
+
+	/**
 	 * @brief Set flags for this channel object
 	 *
 	 * @param flags Flag bitmask to set from dpp::channel_flags
 	 * @return Reference to self, so these method calls may be chained 
 	 */
-	channel& set_flags(const uint8_t flags);
+	channel& set_flags(const uint16_t flags);
 
 	/**
 	 * @brief Add (bitwise OR) a flag to this channel object
@@ -436,7 +473,7 @@ public:
 	/**
 	 * @brief Set bitrate of this channel object
 	 *
-	 * @param bitrate Bitrate to set
+	 * @param bitrate Bitrate to set (in kilobits)
 	 * @return Reference to self, so these method calls may be chained 
 	 */
 	channel& set_bitrate(const uint16_t bitrate);
@@ -484,6 +521,13 @@ public:
 	 * @return channel_type Channel type
 	 */
 	channel_type get_type() const;
+
+	/**
+	 * @brief Get the default forum layout type used to display posts in forum channels
+	 *
+	 * @return forum_layout_types Forum layout type
+	 */
+	forum_layout_type get_default_forum_layout() const;
 
 	/**
 	 * @brief Get the mention ping for the channel
@@ -540,10 +584,12 @@ public:
 	/**
 	 * @brief Get the channel's icon url (if its a group DM), otherwise returns an empty string
 	 *
-	 * @param size The size of the icon in pixels. It can be any power of two between 16 and 4096. if not specified, the default sized icon is returned.
-	 * @return std::string icon url or empty string
+	 * @param size The size of the icon in pixels. It can be any power of two between 16 and 4096,
+	 * otherwise the default sized icon is returned.
+	 * @param format The format to use for the avatar. It can be one of `i_webp`, `i_jpg` or `i_png`.
+	 * @return std::string icon url or an empty string, if required attributes are missing or an invalid format was passed
 	 */
-	std::string get_icon_url(uint16_t size = 0) const;
+	std::string get_icon_url(uint16_t size = 0, const image_type format = i_png) const;
 
 	/**
 	 * @brief Returns true if the channel is NSFW gated
@@ -645,6 +691,13 @@ public:
 	 */
 	bool is_pinned_thread() const;
 
+	/**
+	 * @brief Returns true if a tag is required to be specified when creating a thread in a forum channel
+	 *
+	 * @return true, if a tag is required to be specified when creating a thread in a forum channel
+	 */
+	bool is_tag_required() const;
+
 };
 
 /** @brief A definition of a discord thread.
@@ -681,7 +734,7 @@ public:
 	 */
 	uint8_t message_count;
 
-	/** Approximate count of members in a thread (threads) */
+	/** Approximate count of members in a thread (stops counting at 50) */
 	uint8_t member_count;
 
 	/**
@@ -757,6 +810,14 @@ typedef std::unordered_map<snowflake, channel> channel_map;
  * @brief A group of threads
  */
 typedef std::unordered_map<snowflake, thread> thread_map;
+
+/**
+ * @brief A group of threads and thread_members. returned from the cluster::threads_get_active method
+ */
+typedef struct {
+	thread_map threads;
+	thread_member_map thread_members;
+} active_threads;
 
 };
 

@@ -23,14 +23,12 @@
 #include <dpp/guild.h>
 #include <dpp/role.h>
 #include <dpp/stringops.h>
-#include <dpp/nlohmann/json.hpp>
+#include <dpp/json.h>
 
-using json = nlohmann::json;
 
 namespace dpp { namespace events {
 
-using namespace dpp;
-
+using json = nlohmann::json;
 /**
  * @brief Handle event
  * 
@@ -53,14 +51,16 @@ void guild_role_delete::handle(discord_client* client, json &j, const std::strin
 			}
 		} else {
 			json& role = d["role"];
-			dpp::role *r = dpp::find_role(snowflake_not_null(&role, "id"));
+			dpp::snowflake id = snowflake_not_null(&role, "id");
+			dpp::role *r = dpp::find_role(id);
+			if (!client->creator->on_guild_role_delete.empty()) {
+			    dpp::guild_role_delete_t grd(client, raw);
+			    grd.deleting_guild = g;
+			    grd.deleted = r ? r : nullptr;
+			    grd.role_id = id;
+			    client->creator->on_guild_role_delete.call(grd);
+			}
 			if (r) {
-				if (!client->creator->on_guild_role_delete.empty()) {
-					dpp::guild_role_delete_t grd(client, raw);
-					grd.deleting_guild = g;
-					grd.deleted = r;
-					client->creator->on_guild_role_delete.call(grd);
-				}
 				auto i = std::find(g->roles.begin(), g->roles.end(), r->id);
 				if (i != g->roles.end()) {
 					g->roles.erase(i);

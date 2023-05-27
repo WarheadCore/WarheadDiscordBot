@@ -22,7 +22,7 @@
 #include <dpp/discordevents.h>
 #include <dpp/snowflake.h>
 #include <dpp/managed.h>
-#include <dpp/nlohmann/json.hpp>
+#include <dpp/json.h>
 
 namespace dpp {
 
@@ -89,20 +89,41 @@ application& application::fill_from_json(nlohmann::json* j) {
 			this->team.members.emplace_back(tm);
 		}
 	}
+	set_string_not_null(j, "role_connections_verification_url", role_connections_verification_url);
 	return *this;
 }
 
-std::string application::get_cover_image_url(uint16_t size) const {
-	if (!this->cover_image.to_string().empty()) {
-		return utility::cdn_host + "/app-icons/" + std::to_string(this->id) + "/" + this->cover_image.to_string() + ".png" + utility::avatar_size(size);
+std::string application::get_cover_image_url(uint16_t size, const image_type format) const {
+	static const std::map<image_type, std::string> extensions = {
+			{ i_jpg, "jpg" },
+			{ i_png, "png" },
+			{ i_webp, "webp" },
+	};
+
+	if (extensions.find(format) == extensions.end()) {
+		return std::string();
+	}
+
+	if (!this->cover_image.to_string().empty() && this->id) {
+		return utility::cdn_host + "/app-icons/" + std::to_string(this->id) + "/" + this->cover_image.to_string() + "." + extensions.find(format)->second + utility::avatar_size(size);
 	} else {
 		return std::string();
 	}
 }
 
-std::string application::get_icon_url(uint16_t size) const {
-	if (!this->icon.to_string().empty()) {
-		return utility::cdn_host + "/app-icons/" + std::to_string(this->id) + "/" + this->icon.to_string() + ".png" + utility::avatar_size(size);
+std::string application::get_icon_url(uint16_t size, const image_type format) const {
+	static const std::map<image_type, std::string> extensions = {
+			{ i_jpg, "jpg" },
+			{ i_png, "png" },
+			{ i_webp, "webp" },
+	};
+
+	if (extensions.find(format) == extensions.end()) {
+		return std::string();
+	}
+
+	if (!this->icon.to_string().empty() && this->id) {
+		return utility::cdn_host + "/app-icons/" + std::to_string(this->id) + "/" + this->icon.to_string() + "." + extensions.find(format)->second + utility::avatar_size(size);
 	} else {
 		return std::string();
 	}
