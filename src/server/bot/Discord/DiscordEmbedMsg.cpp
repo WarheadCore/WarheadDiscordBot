@@ -27,6 +27,7 @@ namespace
     constexpr std::size_t WARHEAED_DISCORD_MAX_EMBED_FIELDS = 24;
     constexpr std::size_t WARHEAED_DISCORD_MAX_EMBED_FIELDS_NAME = 256;
     constexpr std::size_t WARHEAED_DISCORD_MAX_EMBED_FIELDS_VALUE = 1024;
+    constexpr std::size_t WARHEAED_DISCORD_MAX_DESCRIPTION_LENGTH = 4096;
 }
 
 DiscordEmbedMsg::DiscordEmbedMsg()
@@ -49,6 +50,9 @@ void DiscordEmbedMsg::SetTitle(std::string_view title)
 
 void DiscordEmbedMsg::SetDescription(std::string_view description)
 {
+    if (description.length() > WARHEAED_DISCORD_MAX_DESCRIPTION_LENGTH)
+        LOG_WARN("discord", "Maximum length of description has been reached. Max: {}. Current: {}", WARHEAED_DISCORD_MAX_DESCRIPTION_LENGTH, description.length());
+
     _message->set_description(std::string{ description });
 }
 
