@@ -64,6 +64,10 @@ include(AutoCollect)
 include(ConfigInstall)
 
 find_package(PCHSupport)
+find_package(MySQL REQUIRED)
+
+# Find revision ID and hash of the sourcetree
+include(src/cmake/genrev.cmake)
 
 # print out the results before continuing
 include(src/cmake/showoptions.cmake)

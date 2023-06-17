@@ -21,7 +21,10 @@
 #include "SignalHandlerMgr.h"
 #include "BotMgr.h"
 #include "IoContextMgr.h"
+#include "OpenSSLCrypto.h"
 #include "DiscordMgr.h"
+#include "DatabaseMgr.h"
+#include "DatabaseEnv.h"
 #include "ThreadPool.h"
 #include <boost/version.hpp>
 #include <filesystem>
@@ -31,6 +34,8 @@
 
 namespace fs = std::filesystem;
 constexpr auto WARHEAD_SERVER_CONFIG = "DiscordBot.conf";
+
+bool StartDB();
 void ServerUpdateLoop();
 
 /// Launch the server
@@ -47,20 +52,29 @@ int main()
 
     // Add file and args in config
     sConfigMgr->Configure(configFile.generic_string());
-
     if (!sConfigMgr->LoadAppConfigs())
         return 1;
+
+    // Init logging
+    sLog->Initialize();
 
     // Initialize the random number generator
     srand((unsigned int)GetEpochTime().count());
 
-    // Init logging
-    sLog->Initialize();
+    OpenSSLCrypto::threadsSetup();
 
     LOG_INFO("core", "> Using configuration file:       {}", sConfigMgr->GetFilename());
     LOG_INFO("core", "> Using logs directory:           {}", sLog->GetLogsDir());
     LOG_INFO("core", "> Using SSL version:              {} (library: {})", OPENSSL_VERSION_TEXT, OpenSSL_version(OPENSSL_VERSION));
     LOG_INFO("core", "> Using Boost version:            {}.{}.{}", BOOST_VERSION / 100000, BOOST_VERSION / 100 % 1000, BOOST_VERSION % 100);
+    LOG_INFO("core", "> Using DB client version:        {}", sDatabaseMgr->GetClientInfo());
+    LOG_INFO("core", "> Using DB server version:        {}", sDatabaseMgr->GetServerVersion());
+
+    // Initialize the database connection
+    if (!StartDB())
+        return 1;
+
+    std::shared_ptr<void> dbHandle(nullptr, [](void*) { sDatabaseMgr->CloseAllConnections(); });
 
     auto threadPool = std::make_unique<Warhead::ThreadPool>(1);
     threadPool->PostWork([]() { sIoContextMgr->Run(); });
@@ -75,6 +89,18 @@ int main()
 
     LOG_INFO("server", "Halting process...");
     return 0;
+}
+
+/// Initialize connection to the database
+bool StartDB()
+{
+    sDatabaseMgr->AddDatabase(DiscordDatabase, "Discord");
+    if (!sDatabaseMgr->Load())
+        return false;
+
+    LOG_INFO("server", "Started discord database connection pool.");
+    LOG_INFO("server", "");
+    return true;
 }
 
 void ServerUpdateLoop()
@@ -95,7 +121,7 @@ void ServerUpdateLoop()
             continue;
         }
 
-//        sBotMgr->Update(diff);
+        sBotMgr->Update(diff);
         realPrevTime = realCurrTime;
     }
 }

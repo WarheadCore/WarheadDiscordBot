@@ -20,6 +20,7 @@
 
 #include "Util.h"
 #include "Containers.h"
+#include <boost/core/demangle.hpp>
 #include <algorithm>
 #include <utf8.h>
 
@@ -79,3 +80,106 @@ bool StringEqualI(std::string_view a, std::string_view b)
 {
     return std::equal(a.begin(), a.end(), b.begin(), b.end(), [](char c1, char c2) { return std::tolower(c1) == std::tolower(c2); });
 }
+
+std::string GetTypeName(std::type_info const& info)
+{
+    return boost::core::demangle(info.name());
+}
+
+std::string Warhead::Impl::ByteArrayToHexStr(uint8 const* bytes, size_t arrayLen, bool reverse /* = false */)
+{
+    int32 init = 0;
+    int32 end = arrayLen;
+    int8 op = 1;
+
+    if (reverse)
+    {
+        init = arrayLen - 1;
+        end = -1;
+        op = -1;
+    }
+
+    std::ostringstream ss;
+    for (int32 i = init; i != end; i += op)
+    {
+        char buffer[4];
+        sprintf(buffer, "%02X", bytes[i]);
+        ss << buffer;
+    }
+
+    return ss.str();
+}
+
+void Warhead::Impl::HexStrToByteArray(std::string_view str, uint8* out, size_t outlen, bool reverse /*= false*/)
+{
+//    ASSERT(str.size() == (2 * outlen));
+
+    int32 init = 0;
+    int32 end = int32(str.length());
+    int8 op = 1;
+
+    if (reverse)
+    {
+        init = int32(str.length() - 2);
+        end = -2;
+        op = -1;
+    }
+
+    uint32 j = 0;
+    for (int32 i = init; i != end; i += 2 * op)
+    {
+        char buffer[3] = { str[i], str[i + 1], '\0' };
+        out[j++] = uint8(strtoul(buffer, nullptr, 16));
+    }
+}
+
+bool WStrToUtf8(wchar_t const* wstr, size_t size, std::string& utf8str)
+{
+    try
+    {
+        std::string utf8str2;
+        utf8str2.resize(size * 4);                            // allocate for most long case
+
+        if (size)
+        {
+            char* oend = utf8::utf16to8(wstr, wstr + size, &utf8str2[0]);
+            utf8str2.resize(oend - (&utf8str2[0]));               // remove unused tail
+        }
+
+        utf8str = utf8str2;
+    }
+    catch (std::exception const&)
+    {
+        utf8str.clear();
+        return false;
+    }
+
+    return true;
+}
+
+bool WStrToUtf8(std::wstring_view wstr, std::string& utf8str)
+{
+    try
+    {
+        std::string utf8str2;
+        utf8str2.resize(wstr.size() * 4);                     // allocate for most long case
+
+        if (!wstr.empty())
+        {
+            char* oend = utf8::utf16to8(wstr.begin(), wstr.end(), &utf8str2[0]);
+            utf8str2.resize(oend - (&utf8str2[0]));                // remove unused tail
+        }
+
+        utf8str = utf8str2;
+    }
+    catch (std::exception const&)
+    {
+        utf8str.clear();
+        return false;
+    }
+
+    return true;
+}
+
+void wstrToUpper(std::wstring& str) { std::transform(std::begin(str), std::end(str), std::begin(str), wcharToUpper); }
+void wstrToLower(std::wstring& str) { std::transform(std::begin(str), std::end(str), std::begin(str), wcharToLower); }

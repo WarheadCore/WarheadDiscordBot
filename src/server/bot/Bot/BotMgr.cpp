@@ -18,6 +18,7 @@
 #include "BotMgr.h"
 #include "DiscordMgr.h"
 #include "IoContextMgr.h"
+#include "DatabaseEnv.h"
 
 std::atomic<bool> BotMgr::_stopEvent;
 
@@ -31,4 +32,14 @@ void BotMgr::StopNow()
 {
     _stopEvent = true;
     sIoContextMgr->Stop();
+}
+
+void BotMgr::Update(Milliseconds /*diff*/)
+{
+    ProcessQueryCallbacks();
+}
+
+void BotMgr::ProcessQueryCallbacks()
+{
+    _queryProcessor.ProcessReadyCallbacks();
 }

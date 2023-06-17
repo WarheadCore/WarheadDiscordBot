@@ -26,7 +26,10 @@
 
 namespace dpp
 {
+    class commandhandler;
     class cluster;
+
+    struct slashcommand_t;
 }
 
 struct ConfirmButton
@@ -48,13 +51,21 @@ public:
     void LoadConfig(bool reload);
     void Start();
     void Stop();
+    static bool NormalizePlayerName(std::string& name);
 
     void SendDefaultMessage(std::string_view message, uint64 channelID);
     void SendEmbedMessage(DiscordEmbedMsg const& embed, uint64 channelID);
 
+    void AddGuildNickName(uint64 guildId, uint64 userId, uint64 channelId, std::string_view nickName, std::string_view gameSpec, int32 ilvl);
+
 private:
     void ConfigureLogs();
     void ConfigureCommands();
+    static void GuildAddHandler(dpp::slashcommand_t const& event);
+    void GuildGetPlayersHandler(dpp::slashcommand_t const& event);
+    void CheckRolesHandler(dpp::slashcommand_t const& event);
+    void ConfigureCommandAddPlayerToGuild();
+    void ConfigureCommandGetGuildPlayers();
     void CheckGuild();
 
     ConfirmButton* GetConfirmButton(uint64 authorId);

@@ -18,8 +18,10 @@
 #ifndef _WARHEAD_BOT_MGR_H_
 #define _WARHEAD_BOT_MGR_H_
 
+#include "AsyncCallbackProcessor.h"
 #include "Define.h"
 #include "Duration.h"
+#include "DatabaseEnvFwd.h"
 #include <atomic>
 #include <mutex>
 
@@ -37,8 +39,13 @@ public:
     static bool IsStopped() { return _stopEvent; }
     static void StopNow();
 
+    QueryCallbackProcessor& GetQueryProcessor() { return _queryProcessor; }
+
 private:
+    void ProcessQueryCallbacks();
+
     static std::atomic<bool> _stopEvent;
+    QueryCallbackProcessor _queryProcessor;
 };
 
 #define sBotMgr BotMgr::instance()

@@ -48,6 +48,12 @@
 #  define WH_COMMON_API WH_API_IMPORT
 #endif
 
+#ifdef WARHEAD_API_EXPORT_DATABASE
+#  define WH_DATABASE_API WH_API_EXPORT
+#else
+#  define WH_DATABASE_API WH_API_IMPORT
+#endif
+
 #ifdef WARHEAD_API_EXPORT_BOT
 #  define WH_BOT_API WH_API_EXPORT
 #else
@@ -63,4 +69,4 @@ typedef std::uint32_t uint32;
 typedef std::uint16_t uint16;
 typedef std::uint8_t uint8;
 
-#endif // WARHEAD_DEFINE_H
+#endif

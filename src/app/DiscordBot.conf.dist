@@ -7,23 +7,10 @@
 #
 #    EXAMPLE CONFIG
 #    SERVER SETTINGS
+#    MYSQL SETTINGS
+#    UPDATE SETTINGS
 #    LOGGING SYSTEM SETTINGS
 #
-###################################################################################################
-
-###################################################################################################
-# EXAMPLE CONFIG
-#
-#    Variable
-#        Description: Brief description what the variable is doing.
-#        Important:   Annotation for important things about this variable.
-#        Example:     "Example, i.e. if the value is a string"
-#        Default:     10 - (Enabled|Comment|Variable name in case of grouped config options)
-#                     0  - (Disabled|Comment|Variable name in case of grouped config options)
-#
-# Note to developers:
-# - Copy this example to keep the formatting.
-# - Line breaks should be at column 100.
 ###################################################################################################
 
 ###################################################################################################
@@ -38,8 +25,40 @@
 #
 
 LogsDir = ""
-###################################################################################################
 
+#
+#    SourceDirectory
+#        Description: The path to your WarheadCore source directory.
+#                     If the path is left empty, the built-in CMAKE_SOURCE_DIR is used.
+#        Example:     "../WarheadCore"
+#        Default:     ""
+#
+
+SourceDirectory = ""
+
+#
+#    MySQLExecutable
+#        Description: The path to your MySQL CLI binary.
+#                     If the path is left empty, built-in path from cmake is used.
+#        Example:     "C:/Program Files/MariaDB 10.10/bin/mysql.exe"
+#                     "C:/Program Files/MySQL/MySQL Server 8.0/bin/mysql.exe"
+#                     "mysql.exe"
+#                     "/usr/bin/mysql"
+#        Default:     ""
+#
+
+MySQLExecutable = ""
+
+#
+#    TempDir
+#        Description: Temp directory setting.
+#        Important:   TempDir needs to be quoted, as the string might contain space characters.
+#                     TempDir directory must exists, or the server can't work properly
+#        Default:     "" - (Temp files will be stored in the current path)
+#
+
+TempDir = ""
+###################################################################################################
 
 ###################################################################################################
 # MYSQL SETTINGS
@@ -47,18 +66,15 @@ LogsDir = ""
 #    AuthDatabaseInfo
 #        Description: Database connection settings for the realm server.
 #        Example:     "hostname;port;username;password;database"
-#                     ".;somenumber;username;password;database" - (Use named pipes on Windows
-#                                                                 "enable-named-pipe" to [mysqld]
-#                                                                 section my.ini)
-#                     ".;/path/to/unix_socket;username;password;database;ssl" - (use Unix sockets on
-#                                                                           Unix/Linux)
-#        Default:     "127.0.0.1;3306;warhead;warhead;warhead_auth"
+#                     ".;somenumber;username;password;database"
+#                     ".;/path/to/unix_socket;username;password;database;ssl" - (use Unix sockets on Unix/Linux)
+#        Default:     "127.0.0.1;3306;warhead;warhead;discord"
 #
 #    The SSL option will enable TLS when connecting to the specified database. If not provided or
 #    any value other than 'ssl' is set, TLS will not be used.
 #
 
-AuthDatabaseInfo = "127.0.0.1;3306;warhead;warhead;warhead_auth"
+DiscordDatabaseInfo = "127.0.0.1;3306;warhead;warhead;discord"
 
 #
 #    Database.Reconnect.Seconds
@@ -73,12 +89,82 @@ Database.Reconnect.Seconds = 15
 Database.Reconnect.Attempts = 20
 
 #
+#    MaxQueueSize
+#        Description: Max size queue before open new dynamic async connect for db
+#        Default:     10
+#
+
+MaxQueueSize = 10
+
+#
 #    MaxPingTime
 #        Description: Time (in minutes) between database pings.
 #        Default:     30
 #
 
 MaxPingTime = 30
+###################################################################################################
+
+###################################################################################################
+#   UPDATE SETTINGS
+#
+#    Updates.EnableDatabases
+#        Description: A mask that describes which databases shall be updated.
+#
+#        Following flags are available
+#           DATABASE_LOGIN  = 1, // Auth database
+#
+#        Default:     0  - (All Disabled)
+#                     1  - (All Enabled)
+#
+
+Updates.EnableDatabases = 1
+
+#
+#    Updates.AutoSetup
+#        Description: Auto populate empty databases.
+#        Default:     1 - (Enabled)
+#                     0 - (Disabled)
+
+Updates.AutoSetup = 1
+
+#
+#    Updates.Redundancy
+#        Description: Perform data redundancy checks through hashing
+#                     to detect changes on sql updates and reapply it.
+#        Default:     1 - (Enabled)
+#                     0 - (Disabled)
+
+Updates.Redundancy = 1
+
+#
+#    Updates.ArchivedRedundancy
+#        Description: Check hashes of archived updates (slows down startup).
+#        Default:     0 - (Disabled)
+#                     1 - (Enabled)
+
+Updates.ArchivedRedundancy = 0
+
+#
+#    Updates.AllowRehash
+#        Description: Inserts the current file hash in the database if it is left empty.
+#                     Useful if you want to mark a file as applied but you don't know its hash.
+#        Default:     1 - (Enabled)
+#                     0 - (Disabled)
+
+Updates.AllowRehash = 1
+
+#
+#    Updates.CleanDeadRefMaxCount
+#        Description: Cleans dead/ orphaned references that occur if an update was removed or renamed and edited in one step.
+#                     It only starts the clean up if the count of the missing updates is below or equal the Updates.CleanDeadRefMaxCount value.
+#                     This way prevents erasing of the update history due to wrong source directory state (maybe wrong branch or bad revision).
+#                     Disable this if you want to know if the database is in a possible "dirty state".
+#        Default:     3 - (Enabled)
+#                     0 - (Disabled)
+#                    -1 - (Enabled - unlimited)
+
+Updates.CleanDeadRefMaxCount = 3
 ###################################################################################################
 
 ###################################################################################################
@@ -194,8 +280,7 @@ LogChannel.Server = "2","6","[%Y-%m-%d %H:%M:%S] %t","Server.log"
 #                         6 - (Debug)
 #                         7 - (Trace)
 #
-#                     File channel: file channel linked to logger
-#                     (Using spaces as separator).
+#                     File channel: file channel linked to logger (Using spaces as separator).
 #
 
 Logger.root = 5,Console Server

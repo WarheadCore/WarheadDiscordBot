@@ -42,7 +42,7 @@ target_link_libraries(bot
     warhead-core-interface
     libdpp
   PUBLIC
-    common)
+    database)
 
 # Install dynamic lib
 InstallDynamicLibrary(bot)

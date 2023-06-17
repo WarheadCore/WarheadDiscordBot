@@ -50,7 +50,8 @@ target_link_libraries(common
     threads
     range-v3
     fmt
-    sfmt)
+    sfmt
+    indicators)
 
 # Install dynamic lib
 InstallDynamicLibrary(common)
