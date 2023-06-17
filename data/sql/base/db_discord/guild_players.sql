@@ -28,7 +28,8 @@ CREATE TABLE `guild_players` (
   `nickname` varchar(255) NOT NULL,
   `ilvl` int(11) NOT NULL,
   `game_spec` varchar(255) NOT NULL,
-  `twinks` varchar(255) DEFAULT ''
+  `twinks` varchar(255) DEFAULT '',
+  PRIMARY KEY (`discord_guild_id`,`user_id`,`nickname`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
