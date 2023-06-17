@@ -66,7 +66,7 @@ UpdateFetcher::UpdateFetcher(Path const& sourceDirectory,
 UpdateFetcher::LocaleFileStorage UpdateFetcher::GetFileList() const
 {
     DirectoryStorage directories = ReceiveIncludedDirectories();
-    if (directories.empty() || directories.size() < 3)
+    if (directories.empty())
     {
         LOG_ERROR("db.update", "> Not found all includes directory. Try reapply `updates_include`");
 
@@ -80,7 +80,7 @@ UpdateFetcher::LocaleFileStorage UpdateFetcher::GetFileList() const
         _applyFile(updateFile);
 
         directories = ReceiveIncludedDirectories();
-        if (directories.empty() || directories.size() < 3)
+        if (directories.empty())
             ABORT("Can't find all includes directory");
         else
             LOG_INFO("db.update", "> Successful restored includes directory");
