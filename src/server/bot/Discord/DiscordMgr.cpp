@@ -212,6 +212,7 @@ void DiscordMgr::ConfigureCommands()
             embedMsg->SetDescription("Вы не являетесь автором этого запроса");
 
             dpp::message replyMessage{ channelID, *embedMsg->GetMessage() };
+            replyMessage.set_flags(dpp::m_ephemeral);
             event.reply(replyMessage);
             return;
         }
@@ -222,6 +223,7 @@ void DiscordMgr::ConfigureCommands()
             embedMsg->SetDescription("Странная ситуация, не могу понять, куда вы нажали о.о");
 
             dpp::message replyMessage{ channelID, *embedMsg->GetMessage() };
+            replyMessage.set_flags(dpp::m_ephemeral);
             event.reply(replyMessage);
             return;
         }
@@ -234,6 +236,7 @@ void DiscordMgr::ConfigureCommands()
             embedMsg->SetDescription("Запрос удалён");
 
             dpp::message replyMessage{ channelID, *embedMsg->GetMessage() };
+            replyMessage.set_flags(dpp::m_ephemeral);
             event.reply(replyMessage);
             return;
         }
@@ -244,6 +247,7 @@ void DiscordMgr::ConfigureCommands()
             embedMsg->SetDescription("Странная ситуация (2), не могу понять, куда вы нажали о.о");
 
             dpp::message replyMessage{ channelID, *embedMsg->GetMessage() };
+            replyMessage.set_flags(dpp::m_ephemeral);
             event.reply(replyMessage);
             return;
         }
@@ -255,6 +259,7 @@ void DiscordMgr::ConfigureCommands()
             embedMsg->SetDescription("Не найден запрос на проверку");
 
             dpp::message replyMessage{ channelID, *embedMsg->GetMessage() };
+            replyMessage.set_flags(dpp::m_ephemeral);
             event.reply(replyMessage);
             return;
         }
@@ -263,6 +268,7 @@ void DiscordMgr::ConfigureCommands()
         embedMsg->SetDescription("Запрос на сервер дискорда был отправлен");
 
         dpp::message replyMessage{ channelID, *embedMsg->GetMessage() };
+        replyMessage.set_flags(dpp::m_ephemeral);
         event.reply(replyMessage);
 
         for (auto const memberId : confirm->Members)
@@ -287,6 +293,7 @@ void DiscordMgr::ConfigureCommands()
             embedMsg->SetDescription(Warhead::StringFormat("Введённый ник `{}` некорректный", nickName));
 
             dpp::message replyMessage{ channelId, *embedMsg->GetMessage() };
+            replyMessage.set_flags(dpp::m_ephemeral);
             event.reply(replyMessage);
             return;
         }
@@ -298,6 +305,7 @@ void DiscordMgr::ConfigureCommands()
             embedMsg->SetDescription(Warhead::StringFormat("Введённый уровень предметов `{}` некорректный", ilvlStr));
 
             dpp::message replyMessage{ channelId, *embedMsg->GetMessage() };
+            replyMessage.set_flags(dpp::m_ephemeral);
             event.reply(replyMessage);
             return;
         }
@@ -326,26 +334,6 @@ void DiscordMgr::CheckGuild()
         LOG_ERROR("discord", "DiscordBot: Not found guilds. Disable bot");
         return;
     }
-
-    bool isExistGuild{};
-
-//    for (auto const& [guildID, guild] : guilds)
-//    {
-//        if (guildID == TEST_GUILD_ID)
-//        {
-//            isExistGuild = true;
-//            break;
-//        }
-//    }
-//
-//    if (!isExistGuild)
-//    {
-//        LOG_ERROR("discord", "DiscordBot: Not found config guild: {}. Disable bot", TEST_GUILD_ID);
-//        Stop();
-//        return;
-//    }
-//
-//    LOG_DEBUG("discord", "DiscordBot: Found config guild: {}", TEST_GUILD_ID);
 }
 
 ConfirmButton* DiscordMgr::GetConfirmButton(uint64 authorId)
@@ -405,7 +393,7 @@ void DiscordMgr::AddGuildNickName(uint64 guildId, uint64 userId, uint64 channelI
         if (result)
         {
             embedMsg->SetColor(DiscordMessageColor::Red);
-            embedMsg->SetDescription(Warhead::StringFormat("Персонаж '{}' уже есть в базе", saveNickName));
+            embedMsg->SetDescription(Warhead::StringFormat("Персонаж `{}` уже есть в базе", saveNickName));
 
             SendEmbedMessage(*embedMsg, channelId);
             return;
@@ -417,7 +405,7 @@ void DiscordMgr::AddGuildNickName(uint64 guildId, uint64 userId, uint64 channelI
         DiscordDatabase.Execute(stmt);
 
         embedMsg->SetColor(DiscordMessageColor::Indigo);
-        embedMsg->SetDescription(Warhead::StringFormat("Персонаж '{}' был добавлен в базу. Запрос на выдачу роли отправлен на сервер", saveNickName));
+        embedMsg->SetDescription(Warhead::StringFormat("Персонаж `{}` был добавлен в базу. Запрос на выдачу роли отправлен на сервер", saveNickName));
         SendEmbedMessage(*embedMsg, channelId);
     });
 }
@@ -472,6 +460,7 @@ void DiscordMgr::CheckRolesHandler(const dpp::slashcommand_t &event)
         embedMsg->SetDescription(Warhead::StringFormat("Указанной роли не существует: <@&{}> ({})", uint64(targetRoleKeep), uint64(targetRoleKeep)));
 
         dpp::message replyMessage{ channelID, *embedMsg->GetMessage() };
+        replyMessage.set_flags(dpp::m_ephemeral);
         event.reply(replyMessage);
         return;
     }
@@ -484,6 +473,7 @@ void DiscordMgr::CheckRolesHandler(const dpp::slashcommand_t &event)
         embedMsg->SetDescription(Warhead::StringFormat("Указанной роли не существует: <@&{}> ({})", uint64(targetRoleDelete), uint64(targetRoleDelete)));
 
         dpp::message replyMessage{ channelID, *embedMsg->GetMessage() };
+        replyMessage.set_flags(dpp::m_ephemeral);
         event.reply(replyMessage);
         return;
     }
@@ -503,6 +493,7 @@ void DiscordMgr::CheckRolesHandler(const dpp::slashcommand_t &event)
         embedMsg->SetDescription("Пользователи не найдены. Пустой сервер?");
 
         dpp::message replyMessage{ channelID, *embedMsg->GetMessage() };
+        replyMessage.set_flags(dpp::m_ephemeral);
         event.reply(replyMessage);
         return;
     }
@@ -534,6 +525,7 @@ void DiscordMgr::CheckRolesHandler(const dpp::slashcommand_t &event)
         embedMsg->SetDescription("Пользователи по условию не найдены");
 
         dpp::message replyMessage{ channelID, *embedMsg->GetMessage() };
+        replyMessage.set_flags(dpp::m_ephemeral);
         event.reply(replyMessage);
         return;
     }
@@ -560,6 +552,8 @@ void DiscordMgr::CheckRolesHandler(const dpp::slashcommand_t &event)
                     set_type(dpp::cot_button).
                     set_style(dpp::cos_danger).
                     set_id(Warhead::StringFormat("{}_Delete", authorId))));
+
+    replyMessage.set_flags(dpp::m_ephemeral);
     event.reply(replyMessage);
 }
 
