@@ -26,6 +26,7 @@ void DiscordDatabasePool::DoPrepareStatements()
     // Nickname
     PrepareStatement(DISCORD_SEL_NICKNAMES, "SELECT `nickname`, `ilvl`, `game_spec`, `twinks` FROM `guild_players` WHERE `discord_guild_id` = ?", ConnectionFlags::Async);
     PrepareStatement(DISCORD_SEL_NICKNAME, "SELECT `nickname` FROM `guild_players` WHERE `discord_guild_id` = ? AND `nickname` = ?", ConnectionFlags::Async);
+    PrepareStatement(DISCORD_DEL_NICKNAME, "DELETE FROM `guild_players` WHERE `discord_guild_id` = ? AND `nickname` = ?", ConnectionFlags::Async);
     PrepareStatement(DISCORD_INS_NICKNAME, "INSERT INTO `guild_players` (`discord_guild_id`, `user_id`, `nickname`, `ilvl`, `game_spec`) VALUES (?, ?, ?, ?, ?)", ConnectionFlags::Async);
     PrepareStatement(DISCORD_UPD_NICKNAME, "UPDATE `guild_players` SET `twinks` = ? WHERE `discord_guild_id` = ? AND nickname LIKE ?", ConnectionFlags::Async);
     PrepareStatement(DISCORD_UPD_ILVL, "UPDATE `guild_players` SET `ilvl` = ? WHERE `discord_guild_id` = ? AND nickname LIKE ?", ConnectionFlags::Async);

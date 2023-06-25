@@ -151,26 +151,38 @@ void DiscordMgr::ConfigureLogs()
 
 void DiscordMgr::ConfigureCommands()
 {
-    dpp::slashcommand guildAddCommand{ "guild-add", "Получить роль участника", _bot->me.id };
+    dpp::slashcommand guildAddCommand{ "guild-add", "Вступить в гильдию и получить роль участника", _bot->me.id };
+    dpp::slashcommand guildDelCommand{ "guild-delete", "Удалить участника", _bot->me.id };
     dpp::slashcommand guildCheck{ "guild-players-list", "Получить список участников", _bot->me.id };
     dpp::slashcommand checkRolesCommand{ "check-roles", "Проверить роли участников (25 человек максимум)", _bot->me.id };
 
-    dpp::command_option roleOptionKeep{ dpp::co_role, "role_keep", "Роль, которую нужно оставить", true };
-    dpp::command_option roleOptionDelete{ dpp::co_role, "role_del", "Роль, которую нужно удалить, если есть та, которую нужно оставить", true };
-    dpp::command_option maxUsers{ dpp::co_integer, "max_users", "Максимальное количество пользователей для удаления роли", true };
+    {
+        dpp::command_option nickname{ dpp::co_string, "nickname", "Ник в игре", true };
+        nickname.set_max_length(2);
+        nickname.set_max_length(15);
 
-    maxUsers.set_min_value(1);
-    maxUsers.set_max_value(20);
+        guildDelCommand.add_option(nickname);
+    }
 
-    checkRolesCommand.add_option(roleOptionKeep);
-    checkRolesCommand.add_option(roleOptionDelete);
-    checkRolesCommand.add_option(maxUsers);
+    {
+        dpp::command_option roleOptionKeep{ dpp::co_role, "role_keep", "Роль, которую нужно оставить", true };
+        dpp::command_option roleOptionDelete{ dpp::co_role, "role_del", "Роль, которую нужно удалить, если есть та, которую нужно оставить", true };
+        dpp::command_option maxUsers{ dpp::co_integer, "max_users", "Максимальное количество пользователей для удаления роли", true };
+
+        maxUsers.set_min_value(1);
+        maxUsers.set_max_value(20);
+
+        checkRolesCommand.add_option(roleOptionKeep);
+        checkRolesCommand.add_option(roleOptionDelete);
+        checkRolesCommand.add_option(maxUsers);
+    }
 
     // Admin only
     guildCheck.set_default_permissions(0);
     checkRolesCommand.set_default_permissions(0);
+    guildDelCommand.set_default_permissions(0);
 
-    _bot->current_user_get_guilds([this, guildAddCommand, guildCheck, checkRolesCommand](dpp::confirmation_callback_t const& callback)
+    _bot->current_user_get_guilds([this, guildAddCommand, guildDelCommand, guildCheck, checkRolesCommand](dpp::confirmation_callback_t const& callback)
     {
         if (callback.is_error())
             return;
@@ -182,6 +194,7 @@ void DiscordMgr::ConfigureCommands()
         for (auto const& [id, guild] : guilds)
         {
             _bot->guild_command_create(guildAddCommand, id);
+            _bot->guild_command_create(guildDelCommand, id);
             _bot->guild_command_create(guildCheck, id);
             _bot->guild_command_create(checkRolesCommand, id);
         }
@@ -196,6 +209,8 @@ void DiscordMgr::ConfigureCommands()
             CheckRolesHandler(event);
         else if (commandName == "guild-players-list")
             GuildGetPlayersHandler(event);
+        else if (commandName == "guild-delete")
+            GuildDelHandler(event);
     });
 
     _bot->on_button_click([this](dpp::button_click_t const& event)
@@ -337,11 +352,6 @@ void DiscordMgr::CheckGuild()
         LOG_ERROR("discord", "DiscordBot: Not found guilds. Disable bot");
         ABORT();
         return;
-    }
-
-    for (auto const& [id, guild] : guilds)
-    {
-
     }
 }
 
@@ -650,6 +660,72 @@ void DiscordMgr::GuildGetPlayersHandler(const dpp::slashcommand_t &event)
         }
 
         SendEmbedMessage(*msg, channelId);
+    });
+
+    waiter->get_future().wait();
+
+    dpp::message replyMessage{ channelId, *replyMsg->GetMessage() };
+    replyMessage.set_flags(dpp::m_ephemeral);
+    event.reply(replyMessage);
+}
+
+void DiscordMgr::GuildDelHandler(const dpp::slashcommand_t &event)
+{
+    // Get count parameters
+    auto targetNickname = std::get<std::string>(event.get_parameter("nickname"));
+    NormalizePlayerName(targetNickname);
+
+    auto replyMsg = std::make_shared<DiscordEmbedMsg>();
+    replyMsg->SetTitle("Удаление учатника гильдии");
+
+    auto waiter = std::make_shared<std::promise<void>>();
+    auto channelId = event.command.channel_id;
+    auto guildId = event.command.guild_id;
+    auto stmt = DiscordDatabase.GetPreparedStatement(DISCORD_SEL_NICKNAMES);
+    stmt->SetArguments(uint64(event.command.guild_id));
+
+    sBotMgr->GetQueryProcessor().AddCallback(DiscordDatabase.AsyncQuery(stmt)).WithPreparedCallback([this, waiter, replyMsg, guildId, channelId, targetNickname](PreparedQueryResult result)
+    {
+        if (!result)
+        {
+            replyMsg->SetColor(DiscordMessageColor::Red);
+            replyMsg->SetDescription("Учаcтники не найдены");
+
+            waiter->set_value();
+            return;
+        }
+
+        bool found{};
+
+        for (auto& row : *result)
+        {
+            // SELECT `nickname`, `ilvl`, `game_spec`, `twinks` FROM `guild_players` WHERE `discord_guild_id` = ?
+            auto nickName = row[0].Get<std::string_view>();
+            auto ilvl = row[1].Get<int32>();
+            auto gameSpec = row[2].Get<std::string_view>();
+
+            if (StringEqualI(nickName, targetNickname))
+            {
+                found = true;
+                replyMsg->SetColor(DiscordMessageColor::Yellow);
+                replyMsg->SetDescription("Игрок удалён из базы");
+                replyMsg->AddEmbedField(nickName, Warhead::StringFormat("Спек: `{}`. Илвл: `{}`", gameSpec, ilvl));
+
+                auto stmt = DiscordDatabase.GetPreparedStatement(DISCORD_DEL_NICKNAME);
+                stmt->SetArguments(uint64(guildId), nickName);
+
+                DiscordDatabase.Execute(stmt);
+                break;
+            }
+        }
+
+        if (!found)
+        {
+            replyMsg->SetColor(DiscordMessageColor::Yellow);
+            replyMsg->SetDescription(Warhead::StringFormat("Игрок `{}` не найден в базе", targetNickname));
+        }
+
+        waiter->set_value();
     });
 
     waiter->get_future().wait();

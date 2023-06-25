@@ -62,6 +62,7 @@ private:
     void ConfigureLogs();
     void ConfigureCommands();
     static void GuildAddHandler(dpp::slashcommand_t const& event);
+    void GuildDelHandler(dpp::slashcommand_t const& event);
     void GuildGetPlayersHandler(dpp::slashcommand_t const& event);
     void CheckRolesHandler(dpp::slashcommand_t const& event);
     void CheckGuild();
