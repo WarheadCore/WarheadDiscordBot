@@ -288,7 +288,7 @@ void DiscordMgr::ConfigureCommands()
         auto channelId = event.command.channel_id;
 
         auto embedMsg = std::make_shared<DiscordEmbedMsg>();
-        embedMsg->SetTitle("Выдача роли участника гильдии");
+        embedMsg->SetTitle("Вступление в гильдию");
 
         if (!NormalizePlayerName(nickName))
         {
@@ -397,7 +397,7 @@ void DiscordMgr::AddGuildNickName(uint64 guildId, uint64 userId, uint64 channelI
     sBotMgr->GetQueryProcessor().AddCallback(DiscordDatabase.AsyncQuery(stmt)).WithPreparedCallback([this, guildId, userId, channelId, saveNickName, gameSpec = std::string(gameSpec), ilvl](PreparedQueryResult result)
     {
         auto embedMsg = std::make_shared<DiscordEmbedMsg>();
-        embedMsg->SetTitle("Выдача роли участника гильдии");
+        embedMsg->SetTitle("Вступление в гильдию");
 
         if (result)
         {
