@@ -16,6 +16,7 @@
  */
 
 #include "DiscordMgr.h"
+#include "DiscordConfigMgr.h"
 #include "BotMgr.h"
 #include "Config.h"
 #include "Log.h"
@@ -45,8 +46,7 @@ DiscordMgr* DiscordMgr::instance()
 
 DiscordMgr::~DiscordMgr()
 {
-    if (_bot)
-        _bot->shutdown();
+    Stop();
 }
 
 void DiscordMgr::LoadConfig(bool /*reload*/)
@@ -55,8 +55,11 @@ void DiscordMgr::LoadConfig(bool /*reload*/)
     if (_botToken.empty())
     {
         LOG_FATAL("discord", "> Empty bot token for discord. Disable system");
+        ABORT();
         return;
     }
+
+    sDiscordConfigMgr->LoadConfig();
 }
 
 void DiscordMgr::Start()
@@ -332,7 +335,13 @@ void DiscordMgr::CheckGuild()
     if (guilds.empty())
     {
         LOG_ERROR("discord", "DiscordBot: Not found guilds. Disable bot");
+        ABORT();
         return;
+    }
+
+    for (auto const& [id, guild] : guilds)
+    {
+
     }
 }
 
@@ -405,7 +414,38 @@ void DiscordMgr::AddGuildNickName(uint64 guildId, uint64 userId, uint64 channelI
         DiscordDatabase.Execute(stmt);
 
         embedMsg->SetColor(DiscordMessageColor::Indigo);
-        embedMsg->SetDescription(Warhead::StringFormat("Персонаж `{}` был добавлен в базу. Запрос на выдачу роли отправлен на сервер", saveNickName));
+        embedMsg->SetDescription(Warhead::StringFormat("Персонаж `{}` был добавлен в базу.", saveNickName));
+
+        auto guildConfig = sDiscordConfigMgr->GetConfig(guildId);
+        if (guildConfig && guildConfig->EnableRoleAdd)
+        {
+            auto roleIdUser = guildConfig->RoleIdUser;
+
+            _bot->guild_get_member(guildId, userId, [this, guildId, userId, channelId, roleIdUser](dpp::confirmation_callback_t const& callback)
+            {
+                if (callback.is_error())
+                    return;
+
+                auto userInfo = callback.get<dpp::guild_member>();
+                auto& userRoles = userInfo.roles;
+
+                auto roleFind = std::find(userRoles.begin(), userRoles.end(), roleIdUser);
+                if (roleFind != userRoles.end())
+                    return;
+
+                // Add user role
+                _bot->guild_member_add_role(guildId, userId, roleIdUser, [this, userId, roleIdUser, channelId](dpp::confirmation_callback_t const& callback)
+                {
+                    auto embedMsg = std::make_shared<DiscordEmbedMsg>();
+                    embedMsg->SetTitle("Выдача роли участника гильдии");
+                    embedMsg->SetColor(DiscordMessageColor::Teal);
+                    embedMsg->SetDescription(Warhead::StringFormat("<@{}> получил роль участника", userId));
+
+                    SendEmbedMessage(*embedMsg, channelId);
+                });
+            });
+        }
+
         SendEmbedMessage(*embedMsg, channelId);
     });
 }
@@ -592,7 +632,7 @@ void DiscordMgr::GuildGetPlayersHandler(const dpp::slashcommand_t &event)
 
         for (auto& row : *result)
         {
-            if (++count >= 25)
+            if (++count >= 23)
             {
                 SendEmbedMessage(*msg, channelId);
 

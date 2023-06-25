@@ -64,8 +64,6 @@ private:
     static void GuildAddHandler(dpp::slashcommand_t const& event);
     void GuildGetPlayersHandler(dpp::slashcommand_t const& event);
     void CheckRolesHandler(dpp::slashcommand_t const& event);
-    void ConfigureCommandAddPlayerToGuild();
-    void ConfigureCommandGetGuildPlayers();
     void CheckGuild();
 
     ConfirmButton* GetConfirmButton(uint64 authorId);
