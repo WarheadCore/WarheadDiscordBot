@@ -462,7 +462,7 @@ void DiscordMgr::AddGuildNickName(uint64 guildId, uint64 userId, uint64 channelI
 
 void DiscordMgr::GuildAddHandler(const dpp::slashcommand_t &event)
 {
-    dpp::interaction_modal_response modal("addModal", "Получить роль участника гильдии");
+    dpp::interaction_modal_response modal("addModal", "Вступить в гильдию");
 
     dpp::component nickName;
     nickName.set_label("Ник");
