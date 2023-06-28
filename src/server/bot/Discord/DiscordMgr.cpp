@@ -68,8 +68,7 @@ void DiscordMgr::Start()
 
     StopWatch sw;
 
-    _bot = std::make_unique<dpp::cluster>(_botToken, dpp::i_unverified_default_intents, 0, 0, 1, true,
-        dpp::cache_policy_t{ dpp::cp_aggressive, dpp::cp_aggressive, dpp::cp_aggressive }, 1);
+    _bot = std::make_unique<dpp::cluster>(_botToken, dpp::i_unverified_default_intents);
 
     // Prepare logs
     ConfigureLogs();
